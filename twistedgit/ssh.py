@@ -79,7 +79,7 @@ class GitSession:
     def openShell(self, trans):
         self._kill_connection(trans, "Shell access not allowed\n")
 
-    def _kill_connection(self, proto, msg):
+    def _kill_connection(self, trans, msg):
         class DummyTransport:
             def loseConnection(self):
                 pass
