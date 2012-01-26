@@ -22,6 +22,7 @@ from twisted.conch import error, avatar
 from twisted.conch.checkers import SSHPublicKeyDatabase
 from twisted.conch.ssh import factory, userauth, connection, keys, session
 from twisted.internet import reactor, protocol, defer
+from twisted.internet.error import ProcessExitedAlready
 from twisted.python import log, failure
 from zope.interface import implements
 import sys, shlex
@@ -48,6 +49,7 @@ class GitSession:
 
     def __init__(self, avatar):
         self.avatar = avatar
+        self.ptrans = None
 
     def execCommand(self, proto, cmd):
         cmdparts = shlex.split(cmd)
@@ -70,8 +72,9 @@ class GitSession:
         if realpath is None:
             return self._kill_connection(proto, "Unknown Repository")
         else:
-            log.msg("Spawning %s with args %r" % (gitshell, ['git-shell', '-c', rpc + ' \'' + realpath + '\'']))
-            reactor.spawnProcess(proto, gitshell, ['git-shell', '-c', rpc + ' \'' + realpath + '\''])
+            cmdargs = ['git-shell', '-c', rpc + ' \'' + realpath + '\'']
+            log.msg("Spawning %s with args %r" % (gitshell, cmdargs))
+            self.ptrans = reactor.spawnProcess(proto, gitshell, cmdargs)
 
     def getPty(self, term, windowSize, attrs):
         pass
@@ -89,10 +92,16 @@ class GitSession:
         trans.loseConnection()
 
     def eofReceived(self):
-        pass
+        if self.ptrans:
+            self.ptrans.closeStdin()
 
     def closed(self):
-        pass
+        if self.ptrans:
+            try:
+                self.ptrans.signalProcess('HUP')
+            except (OSError, ProcessExitedAlready):
+                pass
+            self.ptrans.loseConnection()
 
 from twisted.python import components
 components.registerAdapter(GitSession, GitAvatar, session.ISession)
