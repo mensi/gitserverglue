@@ -18,6 +18,7 @@
 # along with TwistedGit.  If not, see http://www.gnu.org/licenses
 
 import os.path
+import sys
 
 from twisted.internet import reactor
 from twisted.conch.ssh import keys
