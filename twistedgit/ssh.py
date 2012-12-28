@@ -22,10 +22,39 @@ from twisted.conch import error, avatar
 from twisted.conch.checkers import SSHPublicKeyDatabase
 from twisted.conch.ssh import factory, userauth, connection, keys, session
 from twisted.internet import reactor, protocol, defer
-from twisted.internet.error import ProcessExitedAlready
-from twisted.python import log, failure
+from twisted.internet.error import ProcessExitedAlready, ProcessTerminated
+from twisted.internet.interfaces import IProcessTransport
+from twisted.python import log
+from twisted.python.failure import Failure
 from zope.interface import implements
 import sys, shlex
+
+class ErrorProcess(object):
+    
+    implements(IProcessTransport)
+    
+    def __init__(self, proto, code, message):
+        proto.makeConnection(self)
+        proto.childDataReceived(2, message + '\n')
+        
+        proto.childConnectionLost(0)
+        proto.childConnectionLost(1)
+        proto.childConnectionLost(2)
+        
+        failure = Failure(ProcessTerminated(code))
+        
+        proto.processExited(failure)
+        proto.processEnded(failure)
+        
+        # ignore all unused methods
+        noop = lambda *args,**kwargs: None
+        self.closeStdin = noop
+        self.closeStdout = noop
+        self.closeStderr = noop
+        self.writeToChild = noop
+        self.loseConnection = noop
+        self.signalProcess = noop
+        
 
 class GitAvatar(avatar.ConchUser):
     def __init__(self, username, authnz, git_configuration):
@@ -70,6 +99,7 @@ class GitSession:
         realpath = self.avatar.git_configuration.translate_path(path)
         gitshell = self.avatar.git_configuration.git_shell_binary
         if realpath is None:
+            log.msg('User %s tried to access %s but the translator did not return a real path' % (self.avatar.username, path))
             return self._kill_connection(proto, "Unknown Repository")
         else:
             cmdargs = ['git-shell', '-c', rpc + ' \'' + realpath + '\'']
@@ -79,17 +109,11 @@ class GitSession:
     def getPty(self, term, windowSize, attrs):
         pass
 
-    def openShell(self, trans):
-        self._kill_connection(trans, "Shell access not allowed\n")
+    def openShell(self, proto):
+        self._kill_connection(proto, "Shell access not allowed\n")
 
-    def _kill_connection(self, trans, msg):
-        class DummyTransport:
-            def loseConnection(self):
-                pass
-
-        trans.makeConnection(DummyTransport())
-        trans.write(msg)
-        trans.loseConnection()
+    def _kill_connection(self, proto, msg):
+        ErrorProcess(proto, 128, msg)
 
     def eofReceived(self):
         if self.ptrans:
@@ -125,7 +149,7 @@ class PasswordChecker:
         if matched:
             return defer.succeed(username)
         else:
-            return failure.Failure(error.UnauthorizedLogin())
+            return Failure(error.UnauthorizedLogin())
 
     def requestAvatarId(self, credentials):
         return defer.maybeDeferred(self.checker, credentials.username, credentials.password).addCallback(
