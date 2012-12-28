@@ -21,11 +21,11 @@
 from setuptools import setup, find_packages
 
 setup(name='TwistedGit',
-      install_requires='twisted',
+      install_requires=['twisted', 'pycrypto'],
       description='Twisted-based implementation of a SSH Daemon for remote git access',
       keywords='git ssh',
       version='0.1',
-      url='',
+      url='https://github.com/mensi/twistedgit',
       license='GPL',
       author='Manuel Stocker',
       author_email='mensi@mensi.ch',
