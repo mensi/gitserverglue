@@ -24,7 +24,7 @@ from twisted.internet import reactor
 from twisted.conch.ssh import keys
 from twisted.python import log
 
-from twistedgit import ssh
+from twistedgit import ssh, http
 
 publicKey = 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCW+fhJvtLJKFsrPvQa2cT/lHq7fbczM2EgXc/qbk37s8FmiLpRftA9U4yy9uqeSdGhi4yeqvLN95Y39bzAsp/H7hM0p9yQxclFe5dZFKkvNEeXsISV4U5qrB+gQiJDuQiSVw9rhTp8BgG+JgAQ9Dk3jSYGXVz7L/33XhF2ZKxCF1CwFevzVDO6GumePtPmxvOhWAJPlvpbIZz2w3Rs/bsgfEeT2QGDjPBrwOXYNRmIHcGbfBADK7fSSdSgwHkSUAY+03tsUh9eo0oljGWapGp6TfJMiXclwn9gSPSva5nXo3wif6OC4JD4XidHu/XdFXKVMEgo1yPQWZSqQopYEA1d'
 privateKey = """-----BEGIN RSA PRIVATE KEY-----
@@ -72,7 +72,12 @@ class TestGitConfiguration(object):
     git_shell_binary = 'git-shell'
 
     def translate_path(self, virtual_path):
-        return os.path.join('./', virtual_path.lstrip('/'))
+        pathparts = virtual_path.lstrip('/').split('/')
+        return os.path.join('./', pathparts[0])
+    
+    def split_path(self, virtual_path):
+        pathparts = virtual_path.lstrip('/').split('/')
+        return '/' + pathparts[0], '/' + '/'.join(pathparts[1:])
 
 def main():
     log.startLogging(sys.stderr)
@@ -83,6 +88,12 @@ def main():
         authnz=TestAuthnz(),
         git_configuration=TestGitConfiguration()
     )
+    
+    http_factory = http.create_factory(
+        authnz=TestAuthnz(),
+        git_configuration=TestGitConfiguration()
+    )
 
-    reactor.listenTCP(5522, ssh_factory())
+    reactor.listenTCP(5522, ssh_factory)
+    reactor.listenTCP(8080, http_factory)
     reactor.run()
