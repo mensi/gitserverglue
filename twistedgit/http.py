@@ -69,14 +69,14 @@ file_headers = {
 
 class FileLikeProducer(object):
     implements(IPushProducer)
-    
+
     def __init__(self, inputFile, consumer=None, cooperator=task, readSize=2 ** 16):
         self._inputFile = inputFile
         self._cooperate = cooperator.cooperate
         self._readSize = readSize
         self._consumer = consumer
         self._task = None
-        
+
     def stopProducing(self):
         try:
             self._task.stop()
@@ -86,12 +86,12 @@ class FileLikeProducer(object):
     def startProducing(self, consumer=None):
         if consumer is not None:
             self._consumer = consumer
-            
+
         if self._task is not None:
             raise Exception("Already started")
-        
-        self._createTask() 
-    
+
+        self._createTask()
+
     def pauseProducing(self):
         self._task.pause()
 
@@ -99,21 +99,21 @@ class FileLikeProducer(object):
         if self._task is None:
             self._createTask()
         self._task.resume()
-        
+
     def _createTask(self):
         if self._consumer is None:
             raise Exception("No consumer")
-        
+
         self._task = self._cooperate(self._writeloop(self._consumer))
         d = self._task.whenDone()
-        
+
         def maybeStopped(reason):
             reason.trap(task.TaskStopped)
             return defer.Deferred()
-        
+
         d.addCallbacks(lambda ignored: None, maybeStopped)
         return d
-    
+
     def _writeloop(self, consumer):
         while True:
             bytes = self._inputFile.read(self._readSize)
@@ -121,47 +121,47 @@ class FileLikeProducer(object):
                 break
             consumer.write(bytes)
             yield None
-    
+
 
 class GitCommand(Resource):
     implements(IProcessProtocol)
-    
+
     isLeaf = True
     process = None
-    
+
     def __init__(self, cmd, args):
         self.cmd = cmd
         self.args = args
-    
+
     # Resource
     def render(self, request):
         self.request = request
         reactor.spawnProcess(self, self.cmd, self.args)
-        
+
         return NOT_DONE_YET
-    
+
     # IProcessProtocol
     def makeConnection(self, process):
         self.process = process
-        
+
         self.request.registerProducer(process, True)
-        
+
         if True:
             # twisted default request, does not support streaming contents
             producer = FileLikeProducer(self.request.content, process)
             producer.startProducing()
-            
+
         process.registerProducer(producer, True)
-        
+
     def childDataReceived(self, childFD, data):
         self.request.write(data)
-    
+
     def childConnectionLost(self, childFD):
         pass
-    
+
     def processExited(self, reason):
         pass
-    
+
     def processEnded(self, reason):
         self.request.unregisterProducer()
         self.request.finish()
@@ -169,45 +169,45 @@ class GitCommand(Resource):
 
 class InfoRefs(Resource):
     isLeaf = True
-    
+
     def __init__(self, gitpath, gitcommand='git'):
         self.gitpath = gitpath
         self.gitcommand = gitcommand
-        
+
     def render_GET(self, request):
         if 'service' not in request.args:
             # dumb client
             for key, val in dont_cache():
                 request.setHeader(key, val)
-                
+
             log.msg('Dumb client, sending %s' % os.path.join(self.gitpath, 'info', 'refs'))
             return File(os.path.join(self.gitpath, 'info', 'refs'), 'text/plain; charset=utf-8').render_GET(request)
-        
+
         else:
             # smart client
             if request.args['service'][0] not in ['git-upload-pack', 'git-receive-pack']:
                 return "Invalid RPC: " + request.args['service'][0]
-            
+
             rpc = request.args['service'][0][4:]
             request.write(git_packet('# service=git-' + rpc) + git_packet())
             cmd = self.gitcommand
             args = [os.path.basename(cmd), rpc, '--stateless-rpc', '--advertise-refs', self.gitpath]
-            
+
             return GitCommand(cmd, args).render(request)
 
 
 class GitResource(Resource):
     def __init__(self, username, authnz, git_configuration, credentialFactories):
         Resource.__init__(self)
-        
+
         self.username = username
         self.authnz = authnz
         self.git_configuration = git_configuration
         self.credentialFactories = credentialFactories
-    
+
     def getChild(self, path, request):
         """Find the appropriate child resource depending on request type
-        
+
         Possible URLs:
         - /foo/bar/info/refs -> info refs (file / SmartHTTP hybrid)
         - /foo/bar/git-upload-pack -> SmartHTTP RPC
@@ -216,48 +216,48 @@ class GitResource(Resource):
         - /foo/bar/objects/* -> file (dumb http)
         """
         path = request.path  # alternatively use path + request.postpath
-        pathparts = path.split('/') 
+        pathparts = path.split('/')
         writerequired = False
         gitpath = script_name = new_path = None
         resource = NoResource()
-        
+
         # Path lookup / translation
         gitpath = self.git_configuration.translate_path(path)
         if gitpath is None:
             log.msg('User %s tried to access %s but the translator did not return a real path' % (self.username, path))
             return resource
-        
+
         if hasattr(self.git_configuration, 'split_path'):
             script_name, new_path = self.git_configuration.split_path(path)
-            
+
         log.msg('Resolved %s to %s with splitting %s :: %s' % (path, gitpath, script_name, new_path))
-        
+
         # since pretty much everything needs read access, check for it now
         if not self.authnz.can_read(self.username, script_name):
             if self.username is None:
                 return UnauthorizedResource(self.credentialFactories)
             else:
                 return ForbiddenResource("You don't have read access")
-        
+
         # Smart HTTP requests
         if len(pathparts) >= 2 and pathparts[-2] == 'info' and pathparts[-1] == 'refs':
             if 'service' in request.args and request.args['service'][0] == 'git-receive-pack':
                 writerequired = True
             resource = InfoRefs(gitpath)
-        
+
         elif len(pathparts) >= 1 and pathparts[-1] == 'git-upload-pack':
             cmd = 'git'
             args = [os.path.basename(cmd), 'upload-pack', '--stateless-rpc', gitpath]
             resource = GitCommand(cmd, args)
-            request.setHeader('Content-Type', 'application/x-git-upload-pack-result')            
-        
+            request.setHeader('Content-Type', 'application/x-git-upload-pack-result')
+
         elif len(pathparts) >= 1 and pathparts[-1] == 'git-receive-pack':
             writerequired = True
             cmd = 'git'
             args = [os.path.basename(cmd), 'receive-pack', '--stateless-rpc', gitpath]
             resource = GitCommand(cmd, args)
             request.setHeader('Content-Type', 'application/x-git-receive-pack-result')
-            
+
         # static files or webfrontend
         else:
             # determine the headers for this file
@@ -268,7 +268,7 @@ class GitResource(Resource):
                     filename = m.group(1)
                     headers = get_headers()
                     break
-                
+
             # if we have a match, serve the file with the appropriate headers or fallback to webfrontend
             if filename is None:
                 # TODO: webfrontend support
@@ -276,11 +276,11 @@ class GitResource(Resource):
             else:
                 for key, val in headers.items():
                     request.setHeader(key, val)
-                    
+
                 log.msg("Returning file %s" % os.path.join(gitpath, filename))
                 resource = File(os.path.join(gitpath, filename), headers['Content-Type'])
                 resource.isLeaf = True  # we are always going straight to the file, so skip further resource tree traversal
-        
+
         # before returning the resource, check if write access is required and enforce privileges accordingly
         # anonymous (username = None) will never be granted write access
         if writerequired and (self.username is None or not self.authnz.can_write(self.username, script_name)):
@@ -288,29 +288,29 @@ class GitResource(Resource):
                 return UnauthorizedResource(self.credentialFactories)
             else:
                 return ForbiddenResource("You don't have write access")
-        
+
         return resource
-    
+
     def render_GET(self, request):
         return ForbiddenResource()
-   
+
 
 class GitHTMLRealm(object):
     implements(IRealm)
-    
+
     def __init__(self, authnz, git_configuration, credentialFactories):
         self.authnz = authnz
         self.git_configuration = git_configuration
         self.credentialFactories = credentialFactories
-    
+
     def requestAvatar(self, avatarId, mind, *interfaces):
         if avatarId == ():
             avatarId = None  # anonymous
-            
+
         if IResource in interfaces:
             return IResource, GitResource(avatarId, self.authnz, self.git_configuration, self.credentialFactories), lambda: None
         raise NotImplementedError()
-   
+
 
 def create_factory(authnz, git_configuration):
     credentialFactories = [BasicCredentialFactory('Git Repositories')]
@@ -320,8 +320,8 @@ def create_factory(authnz, git_configuration):
         log.msg("Registering PasswordChecker")
         gitportal.registerChecker(PasswordChecker(authnz.check_password))
     gitportal.registerChecker(AllowAnonymousAccess())
-        
+
     resource = HTTPAuthSessionWrapper(gitportal, credentialFactories)
     site = Site(resource)
-    
+
     return site

@@ -33,31 +33,30 @@ def git_packet(data=None):
 
 
 class ErrorProcess(object):
-    
     implements(IProcessTransport)
-    
+
     def __init__(self, proto, code, message):
         proto.makeConnection(self)
         proto.childDataReceived(2, message + '\n')
-        
+
         proto.childConnectionLost(0)
         proto.childConnectionLost(1)
         proto.childConnectionLost(2)
-        
+
         failure = Failure(ProcessTerminated(code))
-        
+
         proto.processExited(failure)
         proto.processEnded(failure)
-        
+
         # ignore all unused methods
-        noop = lambda *args,**kwargs: None
+        noop = lambda *args, **kwargs: None
         self.closeStdin = noop
         self.closeStdout = noop
         self.closeStderr = noop
         self.writeToChild = noop
         self.loseConnection = noop
         self.signalProcess = noop
-        
+
 
 class PasswordChecker:
 
@@ -74,5 +73,8 @@ class PasswordChecker:
             return Failure(error.UnauthorizedLogin())
 
     def requestAvatarId(self, credentials):
-        return defer.maybeDeferred(self.checker, credentials.username, credentials.password).addCallback(
-            self._cbPasswordMatch, str(credentials.username))
+        return defer.maybeDeferred(
+           self.checker,
+           credentials.username,
+           credentials.password
+        ).addCallback(self._cbPasswordMatch, str(credentials.username))

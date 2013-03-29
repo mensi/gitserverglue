@@ -30,25 +30,26 @@ from twistedgit.common import git_packet
 class GitProcessProtocol(ProcessProtocol):
     def __init__(self, gitprotocol):
         self.gitprotocol = gitprotocol
-    
+
     def connectionMade(self):
         # twisted.internet.process.Process seems to not fully
         # implement IPushProducer since stopProducing is missing
         # therefore patch in a dummy one
         if not hasattr(self.transport, "stopProducing"):
-            setattr(self.transport, "stopProducing", lambda: self.transport.loseConnection())
-        
+            setattr(self.transport, "stopProducing",
+                    lambda: self.transport.loseConnection())
+
         self.transport.registerProducer(self.gitprotocol, True)
         self.gitprotocol.transport.registerProducer(self.transport, True)
-        
+
         self.gitprotocol.resumeProducing()
-        
+
     def outReceived(self, data):
         self.gitprotocol.transport.write(data)
-        
+
     def errReceived(self, data):
         self.gitprotocol.transport.write(data)
-    
+
     def processEnded(self, status):
         log.msg("Git ended with %r" % status)
         self.gitprotocol.transport.unregisterProducer()
@@ -57,76 +58,76 @@ class GitProcessProtocol(ProcessProtocol):
 
 class GitProtocol(Protocol):
     implements(IPushProducer)
-    
+
     __buffer = ''
     paused = False
     requestReceived = False
-    
+
     def __init__(self, authnz, git_configuration):
         self.authnz = authnz
         self.git_configuration = git_configuration
-        
+
     def dataReceived(self, data):
         self.__buffer = self.__buffer + data
-        
+
         while not self.paused and len(self.__buffer) >= 4:
             try:
                 pktlen = int(self.__buffer[:4], 16)
             except ValueError:
                 return self.sendErrorAndDisconnect("ERR Invalid Paket Length: " + self.__buffer[:4])
-            
+
             if pktlen == 0:  # flush packet 0000
                 pktlen = 4
-                
+
             if pktlen < 4 or pktlen > 65524:
                 return self.sendErrorAndDisconnect("ERR Invalid Paket Length: " + self.__buffer[:4])
-            
+
             if pktlen > len(self.__buffer):
                 return  # not enough data
-            
+
             packet = self.__buffer[:pktlen]
             self.__buffer = self.__buffer[pktlen:]
             self.packetReceived(packet)
-            
+
     def packetReceived(self, data):
         if not self.requestReceived:
             payload = data[4:]
-            
+
             if not payload.startswith("git-upload-pack"):
                 return self.sendErrorAndDisconnect("ERR Request not supported. Only git-upload-pack will be accepted")
-            
+
             try:
                 path, host, unused_eol = payload[len("git-upload-pack "):].split("\0")
             except ValueError:
                 return self.sendErrorAndDisconnect("ERR Unable to parse request line")
-                
+
             realpath = self.git_configuration.translate_path(path)
             if realpath is None:
                 return self.sendErrorAndDisconnect("ERR Repository not found")
-            
+
             if not self.authnz.can_read(None, path):
                 return self.sendErrorAndDisconnect("ERR Repository does not allow anonymous read access")
-            
+
             self.pauseProducing()  # wait with data until we have a connection to the process
             self.requestReceived = True
             self.process = GitProcessProtocol(self)
-            
+
             gitbinary = self.git_configuration.git_binary
             cmdargs = ['git', 'upload-pack', realpath]
             log.msg("Spawning %s with args %r" % (gitbinary, cmdargs))
             reactor.spawnProcess(self.process, gitbinary, cmdargs)
-            
+
         else:
             self.process.transport.write(data)
-            
+
     def sendErrorAndDisconnect(self, msg):
         self.transport.write(git_packet(msg))
         self.transport.loseConnection()
-        
-        # return None so it can be used 
+
+        # return None so it can be used
         # in a return statement in dataReceived for simplicity
-        return None    
-    
+        return None
+
     # IPushProducer
     def pauseProducing(self):
         self.paused = True
@@ -145,13 +146,13 @@ class GitProtocol(Protocol):
         # loseConnection will be called when the process ends
         # and everything has been written
         self.paused = True
-        
+
 
 class GitFactory(Factory):
     def __init__(self, authnz, git_configuration):
         self.authnz = authnz
         self.git_configuration = git_configuration
-        
+
     def buildProtocol(self, addr):
         return GitProtocol(self.authnz, self.git_configuration)
 

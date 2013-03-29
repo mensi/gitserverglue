@@ -39,7 +39,7 @@ class GitAvatar(avatar.ConchUser):
         self.username = username
         self.authnz = authnz
         self.git_configuration = git_configuration
-        self.channelLookup.update({'session':session.SSHSession})
+        self.channelLookup.update({'session': session.SSHSession})
 
 
 class GitRealm:

@@ -36,7 +36,7 @@ class TestAuthnz(object):
             return os.path.basename(gitpath).startswith('public_')
         else:
             return True
-    
+
     def can_write(self, username, gitpath):
         return True
 
@@ -55,7 +55,7 @@ class TestGitConfiguration(object):
         pathparts = virtual_path.lstrip('/').split('/')
         realpath = os.path.join('./', pathparts[0])
         return realpath if os.path.exists(realpath) else None
-    
+
     def split_path(self, virtual_path):
         pathparts = virtual_path.lstrip('/').split('/')
         return '/' + pathparts[0], '/' + '/'.join(pathparts[1:])
@@ -63,20 +63,20 @@ class TestGitConfiguration(object):
 
 def main():
     log.startLogging(sys.stderr)
-    
+
     keylocation = os.path.expanduser(os.path.join('~', '.twistedgit', 'key.pem'))
     key = None
-    
+
     if os.path.exists(keylocation):
         try:
             key = keys.Key.fromFile(keylocation)
         except:
             pass
-        
+
     if key is None:
         rsakey = RSA.generate(2048)
         key = keys.Key(rsakey)
-        
+
         try:
             if not os.path.exists(os.path.dirname(keylocation)):
                 os.mkdir(os.path.dirname(keylocation))
@@ -92,12 +92,12 @@ def main():
         authnz=TestAuthnz(),
         git_configuration=TestGitConfiguration()
     )
-    
+
     http_factory = http.create_factory(
         authnz=TestAuthnz(),
         git_configuration=TestGitConfiguration()
     )
-    
+
     git_factory = git.create_factory(
         authnz=TestAuthnz(),
         git_configuration=TestGitConfiguration()
