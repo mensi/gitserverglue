@@ -25,10 +25,12 @@ from twisted.python import log
 from twisted.python.failure import Failure
 from zope.interface import implements
 
+
 def git_packet(data=None):
     if data is None:
         return '0000'
     return str(hex(len(data) + 4)[2:].rjust(4, '0')) + data
+
 
 class ErrorProcess(object):
     

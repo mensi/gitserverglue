@@ -17,7 +17,8 @@
 # You should have received a copy of the GNU General Public License
 # along with TwistedGit.  If not, see http://www.gnu.org/licenses
 
-import os, os.path
+import os
+import os.path
 import sys
 
 from twisted.internet import reactor
@@ -27,6 +28,7 @@ from twisted.python import log
 from Crypto.PublicKey import RSA
 
 from twistedgit import ssh, http, git
+
 
 class TestAuthnz(object):
     def can_read(self, username, gitpath):
@@ -44,6 +46,7 @@ class TestAuthnz(object):
     def check_publickey(self, username, keyblob):
         return username == 'test' and keyblob == keys.Key.fromString(data=publicKey).blob()
 
+
 class TestGitConfiguration(object):
     git_binary = 'git'
     git_shell_binary = 'git-shell'
@@ -56,6 +59,7 @@ class TestGitConfiguration(object):
     def split_path(self, virtual_path):
         pathparts = virtual_path.lstrip('/').split('/')
         return '/' + pathparts[0], '/' + '/'.join(pathparts[1:])
+
 
 def main():
     log.startLogging(sys.stderr)

@@ -26,6 +26,7 @@ from twisted.internet.interfaces import IPushProducer, IConsumer
 
 from twistedgit.common import git_packet
 
+
 class GitProcessProtocol(ProcessProtocol):
     def __init__(self, gitprotocol):
         self.gitprotocol = gitprotocol
@@ -53,6 +54,7 @@ class GitProcessProtocol(ProcessProtocol):
         self.gitprotocol.transport.unregisterProducer()
         self.gitprotocol.transport.loseConnection()
 
+
 class GitProtocol(Protocol):
     implements(IPushProducer)
     
@@ -73,14 +75,14 @@ class GitProtocol(Protocol):
             except ValueError:
                 return self.sendErrorAndDisconnect("ERR Invalid Paket Length: " + self.__buffer[:4])
             
-            if pktlen == 0: # flush packet 0000
+            if pktlen == 0:  # flush packet 0000
                 pktlen = 4
                 
             if pktlen < 4 or pktlen > 65524:
                 return self.sendErrorAndDisconnect("ERR Invalid Paket Length: " + self.__buffer[:4])
             
             if pktlen > len(self.__buffer):
-                return # not enough data
+                return  # not enough data
             
             packet = self.__buffer[:pktlen]
             self.__buffer = self.__buffer[pktlen:]
@@ -105,7 +107,7 @@ class GitProtocol(Protocol):
             if not self.authnz.can_read(None, path):
                 return self.sendErrorAndDisconnect("ERR Repository does not allow anonymous read access")
             
-            self.pauseProducing() # wait with data until we have a connection to the process
+            self.pauseProducing()  # wait with data until we have a connection to the process
             self.requestReceived = True
             self.process = GitProcessProtocol(self)
             
@@ -152,6 +154,7 @@ class GitFactory(Factory):
         
     def buildProtocol(self, addr):
         return GitProtocol(self.authnz, self.git_configuration)
+
 
 def create_factory(authnz, git_configuration):
     return GitFactory(authnz, git_configuration)

@@ -24,12 +24,14 @@ from twisted.conch.ssh import factory, userauth, connection, keys, session
 from twisted.internet import reactor, protocol, defer
 from twisted.internet.error import ProcessExitedAlready, ProcessTerminated
 from twisted.internet.interfaces import IProcessTransport
-from twisted.python import log
+from twisted.python import log, components
 from twisted.python.failure import Failure
 from zope.interface import implements
-import sys, shlex
+import sys
+import shlex
 
 from twistedgit.common import ErrorProcess, PasswordChecker
+
 
 class GitAvatar(avatar.ConchUser):
     def __init__(self, username, authnz, git_configuration):
@@ -38,6 +40,7 @@ class GitAvatar(avatar.ConchUser):
         self.authnz = authnz
         self.git_configuration = git_configuration
         self.channelLookup.update({'session':session.SSHSession})
+
 
 class GitRealm:
     implements(portal.IRealm)
@@ -49,6 +52,7 @@ class GitRealm:
     def requestAvatar(self, avatarId, mind, *interfaces):
         log.msg("request %r, %r" % (mind, interfaces))
         return interfaces[0], GitAvatar(avatarId, self.authnz, self.git_configuration), lambda: None
+
 
 class GitSession:
 
@@ -103,8 +107,9 @@ class GitSession:
                 pass
             self.ptrans.loseConnection()
 
-from twisted.python import components
+
 components.registerAdapter(GitSession, GitAvatar, session.ISession)
+
 
 class PublicKeyChecker(SSHPublicKeyDatabase):
     def __init__(self, checker):
@@ -112,6 +117,7 @@ class PublicKeyChecker(SSHPublicKeyDatabase):
 
     def checkKey(self, credentials):
         return defer.maybeDeferred(self.checker, credentials.username, credentials.blob)
+
 
 def create_factory(private_keys, public_keys, authnz, git_configuration):
     class GitSSHFactory(factory.SSHFactory):

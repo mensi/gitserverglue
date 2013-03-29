@@ -40,6 +40,7 @@ from twisted.web.resource import Resource, IResource, NoResource, ForbiddenResou
 
 from twistedgit.common import PasswordChecker, git_packet
 
+
 def get_date_header(dt=None):
     if dt is None:
         dt = datetime.datetime.now()
@@ -65,6 +66,7 @@ file_headers = {
     re.compile('.*/(objects/pack/pack-[0-9a-f]{40}\\.idx)$'):   lambda: dict(cache_forever() + [('Content-Type', 'application/x-git-packed-objects-toc')]),
 }
 
+
 class FileLikeProducer(object):
     implements(IPushProducer)
     
@@ -81,7 +83,7 @@ class FileLikeProducer(object):
         except:
             pass
 
-    def startProducing(self, consumer = None):
+    def startProducing(self, consumer=None):
         if consumer is not None:
             self._consumer = consumer
             
@@ -104,9 +106,11 @@ class FileLikeProducer(object):
         
         self._task = self._cooperate(self._writeloop(self._consumer))
         d = self._task.whenDone()
+        
         def maybeStopped(reason):
             reason.trap(task.TaskStopped)
             return defer.Deferred()
+        
         d.addCallbacks(lambda ignored: None, maybeStopped)
         return d
     
@@ -162,10 +166,11 @@ class GitCommand(Resource):
         self.request.unregisterProducer()
         self.request.finish()
 
+
 class InfoRefs(Resource):
     isLeaf = True
     
-    def __init__(self, gitpath, gitcommand = 'git'):
+    def __init__(self, gitpath, gitcommand='git'):
         self.gitpath = gitpath
         self.gitcommand = gitcommand
         
@@ -190,6 +195,7 @@ class InfoRefs(Resource):
             
             return GitCommand(cmd, args).render(request)
 
+
 class GitResource(Resource):
     def __init__(self, username, authnz, git_configuration, credentialFactories):
         Resource.__init__(self)
@@ -209,7 +215,7 @@ class GitResource(Resource):
         - /foo/bar/HEAD -> file (dumb http)
         - /foo/bar/objects/* -> file (dumb http)
         """
-        path = request.path # alternatively use path + request.postpath
+        path = request.path  # alternatively use path + request.postpath
         pathparts = path.split('/') 
         writerequired = False
         gitpath = script_name = new_path = None
@@ -273,7 +279,7 @@ class GitResource(Resource):
                     
                 log.msg("Returning file %s" % os.path.join(gitpath, filename))
                 resource = File(os.path.join(gitpath, filename), headers['Content-Type'])
-                resource.isLeaf = True # we are always going straight to the file, so skip further resource tree traversal
+                resource.isLeaf = True  # we are always going straight to the file, so skip further resource tree traversal
         
         # before returning the resource, check if write access is required and enforce privileges accordingly
         # anonymous (username = None) will never be granted write access
@@ -287,7 +293,8 @@ class GitResource(Resource):
     
     def render_GET(self, request):
         return ForbiddenResource()
-    
+   
+
 class GitHTMLRealm(object):
     implements(IRealm)
     
@@ -298,12 +305,13 @@ class GitHTMLRealm(object):
     
     def requestAvatar(self, avatarId, mind, *interfaces):
         if avatarId == ():
-            avatarId = None # anonymous
+            avatarId = None  # anonymous
             
         if IResource in interfaces:
             return IResource, GitResource(avatarId, self.authnz, self.git_configuration, self.credentialFactories), lambda: None
         raise NotImplementedError()
-    
+   
+
 def create_factory(authnz, git_configuration):
     credentialFactories = [BasicCredentialFactory('Git Repositories')]
     gitportal = Portal(GitHTMLRealm(authnz, git_configuration, credentialFactories))
