@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with TwistedGit.  If not, see http://www.gnu.org/licenses
 
-from twisted.cred import portal, checkers, credentials
+from twisted.cred import portal, checkers, credentials, error
 from twisted.internet import reactor, protocol, defer
 from twisted.internet.error import ProcessExitedAlready, ProcessTerminated
 from twisted.internet.interfaces import IProcessTransport

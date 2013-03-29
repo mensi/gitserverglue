@@ -26,11 +26,15 @@ from twisted.python import log
 
 from Crypto.PublicKey import RSA
 
-from twistedgit import ssh, http
+from twistedgit import ssh, http, git
 
 class TestAuthnz(object):
     def can_read(self, username, gitpath):
-        return True
+        if username is None:
+            return os.path.basename(gitpath).startswith('public_')
+        else:
+            return True
+    
     def can_write(self, username, gitpath):
         return True
 
@@ -46,7 +50,8 @@ class TestGitConfiguration(object):
 
     def translate_path(self, virtual_path):
         pathparts = virtual_path.lstrip('/').split('/')
-        return os.path.join('./', pathparts[0])
+        realpath = os.path.join('./', pathparts[0])
+        return realpath if os.path.exists(realpath) else None
     
     def split_path(self, virtual_path):
         pathparts = virtual_path.lstrip('/').split('/')
@@ -88,7 +93,13 @@ def main():
         authnz=TestAuthnz(),
         git_configuration=TestGitConfiguration()
     )
+    
+    git_factory = git.create_factory(
+        authnz=TestAuthnz(),
+        git_configuration=TestGitConfiguration()
+    )
 
     reactor.listenTCP(5522, ssh_factory)
     reactor.listenTCP(8080, http_factory)
+    reactor.listenTCP(9418, git_factory)
     reactor.run()

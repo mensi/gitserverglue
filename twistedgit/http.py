@@ -16,6 +16,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with TwistedGit.  If not, see http://www.gnu.org/licenses
+
 import os.path
 import re
 import datetime
@@ -29,8 +30,9 @@ from twisted.internet import reactor, defer, task
 from twisted.internet.interfaces import IProcessProtocol, IPushProducer, IConsumer
 
 from twisted.cred.portal import IRealm, Portal
-from twisted.cred.checkers import FilePasswordDB
+from twisted.cred.checkers import AllowAnonymousAccess
 from twisted.web.guard import HTTPAuthSessionWrapper, BasicCredentialFactory
+from twisted.web._auth.wrapper import UnauthorizedResource
 
 from twisted.web.static import File
 from twisted.web.server import Site, NOT_DONE_YET
@@ -189,12 +191,13 @@ class InfoRefs(Resource):
             return GitCommand(cmd, args).render(request)
 
 class GitResource(Resource):
-    def __init__(self, username, authnz, git_configuration):
+    def __init__(self, username, authnz, git_configuration, credentialFactories):
         Resource.__init__(self)
         
         self.username = username
         self.authnz = authnz
         self.git_configuration = git_configuration
+        self.credentialFactories = credentialFactories
     
     def getChild(self, path, request):
         """Find the appropriate child resource depending on request type
@@ -224,11 +227,16 @@ class GitResource(Resource):
         log.msg('Resolved %s to %s with splitting %s :: %s' % (path, gitpath, script_name, new_path))
         
         # since pretty much everything needs read access, check for it now
-        if not self.authnz.can_read(self.username, path):
-            return ForbiddenResource("You don't have read access")
+        if not self.authnz.can_read(self.username, script_name):
+            if self.username is None:
+                return UnauthorizedResource(self.credentialFactories)
+            else:
+                return ForbiddenResource("You don't have read access")
         
         # Smart HTTP requests
         if len(pathparts) >= 2 and pathparts[-2] == 'info' and pathparts[-1] == 'refs':
+            if 'service' in request.args and request.args['service'][0] == 'git-receive-pack':
+                writerequired = True
             resource = InfoRefs(gitpath)
         
         elif len(pathparts) >= 1 and pathparts[-1] == 'git-upload-pack':
@@ -257,6 +265,7 @@ class GitResource(Resource):
                 
             # if we have a match, serve the file with the appropriate headers or fallback to webfrontend
             if filename is None:
+                # TODO: webfrontend support
                 pass
             else:
                 for key, val in headers.items():
@@ -267,8 +276,12 @@ class GitResource(Resource):
                 resource.isLeaf = True # we are always going straight to the file, so skip further resource tree traversal
         
         # before returning the resource, check if write access is required and enforce privileges accordingly
-        if writerequired and not self.authnz.can_write(self.username, path):
-            return ForbiddenResource("You don't have write access")
+        # anonymous (username = None) will never be granted write access
+        if writerequired and (self.username is None or not self.authnz.can_write(self.username, script_name)):
+            if self.username is None:
+                return UnauthorizedResource(self.credentialFactories)
+            else:
+                return ForbiddenResource("You don't have write access")
         
         return resource
     
@@ -278,24 +291,29 @@ class GitResource(Resource):
 class GitHTMLRealm(object):
     implements(IRealm)
     
-    def __init__(self, authnz, git_configuration):
+    def __init__(self, authnz, git_configuration, credentialFactories):
         self.authnz = authnz
         self.git_configuration = git_configuration
+        self.credentialFactories = credentialFactories
     
     def requestAvatar(self, avatarId, mind, *interfaces):
+        if avatarId == ():
+            avatarId = None # anonymous
+            
         if IResource in interfaces:
-            return IResource, GitResource(avatarId, self.authnz, self.git_configuration), lambda: None
+            return IResource, GitResource(avatarId, self.authnz, self.git_configuration, self.credentialFactories), lambda: None
         raise NotImplementedError()
     
 def create_factory(authnz, git_configuration):
-    gitportal = Portal(GitHTMLRealm(authnz, git_configuration))
+    credentialFactories = [BasicCredentialFactory('Git Repositories')]
+    gitportal = Portal(GitHTMLRealm(authnz, git_configuration, credentialFactories))
 
     if hasattr(authnz, 'check_password'):
         log.msg("Registering PasswordChecker")
         gitportal.registerChecker(PasswordChecker(authnz.check_password))
+    gitportal.registerChecker(AllowAnonymousAccess())
         
-    credentialFactory = BasicCredentialFactory('Git Repositories')
-    resource = HTTPAuthSessionWrapper(gitportal, [credentialFactory])
+    resource = HTTPAuthSessionWrapper(gitportal, credentialFactories)
     site = Site(resource)
     
     return site
