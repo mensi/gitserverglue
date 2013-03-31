@@ -105,6 +105,6 @@ def main():
     )
 
     reactor.listenTCP(5522, ssh_factory)
-    reactor.listenTCP(8080, make_site_streaming(http_factory))
+    reactor.listenTCP(8080, http_factory)
     reactor.listenTCP(9418, git_factory)
     reactor.run()
