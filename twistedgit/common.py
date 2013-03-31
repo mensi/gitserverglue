@@ -17,22 +17,30 @@
 # You should have received a copy of the GNU General Public License
 # along with TwistedGit.  If not, see http://www.gnu.org/licenses
 
-from twisted.cred import portal, checkers, credentials, error
-from twisted.internet import reactor, protocol, defer
+from twisted.cred import checkers, credentials, error
+from twisted.internet import defer
 from twisted.internet.error import ProcessExitedAlready, ProcessTerminated
 from twisted.internet.interfaces import IProcessTransport
-from twisted.python import log
 from twisted.python.failure import Failure
 from zope.interface import implements
 
 
 def git_packet(data=None):
+    """Format data as a git pktline
+
+    If data is None, a flush packet will be returned"""
     if data is None:
         return '0000'
     return str(hex(len(data) + 4)[2:].rjust(4, '0')) + data
 
 
 class ErrorProcess(object):
+    """Simulates a process transport with a message on stderr
+
+    Implements an IProcessTransport that simulates process
+    termination with the given return code and writing
+    a message to stderr. Properly closes child FDs.
+    """
     implements(IProcessTransport)
 
     def __init__(self, proto, code, message):

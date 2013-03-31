@@ -30,7 +30,7 @@ from twisted.internet import reactor, defer, task
 from twisted.internet.interfaces import IProcessProtocol, IPushProducer, IConsumer
 
 from twisted.cred.portal import IRealm, Portal
-from twisted.cred.checkers import AllowAnonymousAccess
+from twisted.cred.checkers import AllowAnonymousAccess, ANONYMOUS
 from twisted.web.guard import HTTPAuthSessionWrapper, BasicCredentialFactory
 from twisted.web._auth.wrapper import UnauthorizedResource
 
@@ -68,6 +68,7 @@ file_headers = {
 
 
 class FileLikeProducer(object):
+    """twisted.web.client.FileBodyProducer adaptation for request.content"""
     implements(IPushProducer)
 
     def __init__(self, inputFile, consumer=None, cooperator=task, readSize=2 ** 16):
@@ -124,6 +125,7 @@ class FileLikeProducer(object):
 
 
 class GitCommand(Resource):
+    """A resource returning content from a git process"""
     implements(IProcessProtocol)
 
     isLeaf = True
@@ -168,6 +170,7 @@ class GitCommand(Resource):
 
 
 class InfoRefs(Resource):
+    """Resource for handling git requests to /info/refs"""
     isLeaf = True
 
     def __init__(self, gitpath, gitcommand='git'):
@@ -197,6 +200,8 @@ class InfoRefs(Resource):
 
 
 class GitResource(Resource):
+    """Resource representing a git repository"""
+
     def __init__(self, username, authnz, git_configuration, credentialFactories):
         Resource.__init__(self)
 
@@ -304,7 +309,7 @@ class GitHTMLRealm(object):
         self.credentialFactories = credentialFactories
 
     def requestAvatar(self, avatarId, mind, *interfaces):
-        if avatarId == ():
+        if avatarId == ANONYMOUS:
             avatarId = None  # anonymous
 
         if IResource in interfaces:
