@@ -40,5 +40,5 @@ Known Issues
 ------------
 
 Twisted will buffer the request body of incoming HTTP requests. Large commits will therefore be buffered in 
-memory before they are written to disk. Cloning is not affected since outgoing responses are sent with the 
+a temporary file before they are passed to git. Cloning is not affected since outgoing responses are sent with the 
 `chunked` transfer encoding.
