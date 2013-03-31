@@ -28,6 +28,7 @@ from twisted.python import log
 from Crypto.PublicKey import RSA
 
 from twistedgit import ssh, http, git
+from twistedgit.streamingweb import make_site_streaming
 
 
 class TestAuthnz(object):
@@ -104,6 +105,6 @@ def main():
     )
 
     reactor.listenTCP(5522, ssh_factory)
-    reactor.listenTCP(8080, http_factory)
+    reactor.listenTCP(8080, make_site_streaming(http_factory))
     reactor.listenTCP(9418, git_factory)
     reactor.run()

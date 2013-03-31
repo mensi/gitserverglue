@@ -39,6 +39,7 @@ from twisted.web.server import Site, NOT_DONE_YET
 from twisted.web.resource import Resource, IResource, NoResource, ForbiddenResource
 
 from twistedgit.common import PasswordChecker, git_packet
+from twistedgit.streamingweb import StreamingRequest
 
 
 def get_date_header(dt=None):
@@ -126,10 +127,11 @@ class FileLikeProducer(object):
 
 class GitCommand(Resource):
     """A resource returning content from a git process"""
-    implements(IProcessProtocol)
+    implements(IProcessProtocol, IConsumer)
 
     isLeaf = True
     process = None
+    _producer = None
 
     def __init__(self, cmd, args):
         self.cmd = cmd
@@ -146,14 +148,24 @@ class GitCommand(Resource):
     def makeConnection(self, process):
         self.process = process
 
+        # twisted.internet.process.Process seems to not fully
+        # implement IPushProducer since stopProducing is missing
+        # therefore patch in a dummy one
+        if not hasattr(process, "stopProducing"):
+            setattr(process, "stopProducing",
+                    lambda: process.loseConnection())
+
         self.request.registerProducer(process, True)
 
-        if True:
+        if not isinstance(self.request, StreamingRequest):
             # twisted default request, does not support streaming contents
             producer = FileLikeProducer(self.request.content, process)
             producer.startProducing()
+            process.registerProducer(producer, True)
 
-        process.registerProducer(producer, True)
+        elif self._producer is not None:
+            self._producer.resumeProducing()
+            self.process.registerProducer(self._producer, True)
 
     def childDataReceived(self, childFD, data):
         self.request.write(data)
@@ -167,6 +179,29 @@ class GitCommand(Resource):
     def processEnded(self, reason):
         self.request.unregisterProducer()
         self.request.finish()
+
+    # IConsumer for StreamingRequest
+    def registerProducer(self, producer, streaming):
+        # suppress original stopProducing since git will
+        # call it on closing stdin -> httpchannel gets closed
+        # because the original stopProducing calls loseConnection
+        def suppressedStop(self):
+            self.pauseProducing()
+        suppressedStop.original = producer.stopProducing
+        producer.stopProducing = suppressedStop.__get__(producer, producer.__class__)
+
+        if self.process is None:
+            producer.pauseProducing()
+            self._producer = producer
+        else:
+            self.process.registerProducer(producer)
+
+    def unregisterProducer(self):
+        if self.process:
+            self.process.closeStdin()
+
+    def write(self, data):
+        self.process.write(data)
 
 
 class InfoRefs(Resource):
