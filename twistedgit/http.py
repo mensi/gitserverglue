@@ -186,7 +186,10 @@ class GitCommand(Resource):
         # call it on closing stdin -> httpchannel gets closed
         # because the original stopProducing calls loseConnection
         def suppressedStop(self):
-            self.pauseProducing()
+            # Do not pause producing here unless you make sure
+            # producing is resumed upon request completion. Otherwise,
+            # no further requests will be received in keep-alive!
+            pass  # self.pauseProducing()
         suppressedStop.original = producer.stopProducing
         producer.stopProducing = suppressedStop.__get__(producer, producer.__class__)
 
