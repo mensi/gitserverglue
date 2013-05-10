@@ -23,18 +23,20 @@ from setuptools import setup, find_packages
 setup(name='TwistedGit',
       install_requires=['twisted', 'pycrypto'],
       description=(
-                   'Twisted-based implementation of a '
-                   'SSH Daemon for remote git access'
+                   'Twisted-based implementation of the '
+                   'network protocols supported by git'
+                   ' (git://, ssh:// and http://)'
       ),
-      keywords='git ssh',
-      version='0.1',
+      keywords='git ssh http',
+      version='0.2',
       url='https://github.com/mensi/twistedgit',
       license='GPL',
       author='Manuel Stocker',
       author_email='mensi@mensi.ch',
       long_description=(
-                        'Twisted-based implementation of '
-                        'a SSH Daemon for remote git access'
+                        'Twisted-based implementation of the '
+                        'network protocols supported by git'
+                        ' (git://, ssh:// and http://)'
                         ),
       packages=find_packages(),
       zip_safe=True,
