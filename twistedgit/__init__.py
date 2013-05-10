@@ -29,16 +29,17 @@ from Crypto.PublicKey import RSA
 
 from twistedgit import ssh, http, git
 from twistedgit.streamingweb import make_site_streaming
+from twistedgit.wsgihelper import WSGIResource
 
 
 class TestAuthnz(object):
-    def can_read(self, username, gitpath):
+    def can_read(self, username, path_info):
         if username is None:
-            return os.path.basename(gitpath).startswith('public_')
+            return path_info['repository_fs_path'] is not None and os.path.basename(path_info['repository_fs_path']).startswith('public_')
         else:
             return True
 
-    def can_write(self, username, gitpath):
+    def can_write(self, username, path_info):
         return True
 
     def check_password(self, username, password):
@@ -52,14 +53,52 @@ class TestGitConfiguration(object):
     git_binary = 'git'
     git_shell_binary = 'git-shell'
 
-    def translate_path(self, virtual_path):
-        pathparts = virtual_path.lstrip('/').split('/')
-        realpath = os.path.join('./', pathparts[0])
-        return realpath if os.path.exists(realpath) else None
+    def path_lookup(self, url, protocol_hint=None):
+        res = {
+            'repository_base_fs_path': './',
+            'repository_base_url_path': '/',
+            'repository_fs_path' : None
+        }
 
-    def split_path(self, virtual_path):
-        pathparts = virtual_path.lstrip('/').split('/')
-        return '/' + pathparts[0], '/' + '/'.join(pathparts[1:])
+        pathparts = url.strip('/').split('/')
+
+        if len(pathparts) > 0 and pathparts[0].endswith('.git'):
+            p = os.path.join('./', pathparts[0])
+            if os.path.exists(p):
+                res['repository_fs_path'] = p
+                res['repository_clone_urls'] = {
+                    'http': 'http://localhost:8080/' + pathparts[0],
+                    'git': 'git://localhost/' + pathparts[0],
+                    'ssh': 'ssh://localhost:5522/' + pathparts[0]
+                }
+
+
+        return res
+
+
+def find_git_viewer():
+    """Tries to find a known git viewer"""
+    # pyggi - https://www.0xdeadbeef.ch/pyggi/pyggi.git/
+    # not to be confused with PyGGI from PyPI
+    try:
+        from pyggi.lib.config import config
+
+        config.add_section('general')
+        config.set('general', 'preserve_daemon_export', "false")
+        config.set('general', 'name', "pyggi")
+
+        config.add_section('clone')
+
+        config.add_section('modules')
+        config.set('modules', 'pyggi.repositories.frontend', '/')
+        config.set('modules', 'pyggi.base.base', '/')
+
+        from pyggi import create_app
+
+        return WSGIResource(reactor, reactor.getThreadPool(), create_app())
+
+    except:
+        pass
 
 
 def main():
@@ -96,7 +135,8 @@ def main():
 
     http_factory = http.create_factory(
         authnz=TestAuthnz(),
-        git_configuration=TestGitConfiguration()
+        git_configuration=TestGitConfiguration(),
+        git_viewer=find_git_viewer()
     )
 
     git_factory = git.create_factory(

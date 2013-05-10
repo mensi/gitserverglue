@@ -76,13 +76,13 @@ class GitSession:
             log.msg('User %s tried to access %s but does not have write permissions' % (self.avatar.username, path))
             return self._kill_connection(proto, "You don't have write permissions")
 
-        realpath = self.avatar.git_configuration.translate_path(path)
+        path_info = self.avatar.git_configuration.path_lookup(path)
         gitshell = self.avatar.git_configuration.git_shell_binary
-        if realpath is None:
+        if path_info is None or path_info['repository_fs_path'] is None:
             log.msg('User %s tried to access %s but the translator did not return a real path' % (self.avatar.username, path))
             return self._kill_connection(proto, "Unknown Repository")
         else:
-            cmdargs = ['git-shell', '-c', rpc + ' \'' + realpath + '\'']
+            cmdargs = ['git-shell', '-c', rpc + ' \'' + path_info['repository_fs_path'] + '\'']
             log.msg("Spawning %s with args %r" % (gitshell, cmdargs))
             self.ptrans = reactor.spawnProcess(proto, gitshell, cmdargs)
 

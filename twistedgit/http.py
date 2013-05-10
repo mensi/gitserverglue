@@ -240,13 +240,14 @@ class InfoRefs(Resource):
 class GitResource(Resource):
     """Resource representing a git repository"""
 
-    def __init__(self, username, authnz, git_configuration, credentialFactories):
+    def __init__(self, username, authnz, git_configuration, credentialFactories, git_viewer):
         Resource.__init__(self)
 
         self.username = username
         self.authnz = authnz
         self.git_configuration = git_configuration
         self.credentialFactories = credentialFactories
+        self.git_viewer = git_viewer
 
     def getChild(self, path, request):
         """Find the appropriate child resource depending on request type
@@ -261,22 +262,29 @@ class GitResource(Resource):
         path = request.path  # alternatively use path + request.postpath
         pathparts = path.split('/')
         writerequired = False
-        gitpath = script_name = new_path = None
+        script_name = '/'
+        new_path = path
         resource = NoResource()
 
         # Path lookup / translation
-        gitpath = self.git_configuration.translate_path(path)
-        if gitpath is None:
-            log.msg('User %s tried to access %s but the translator did not return a real path' % (self.username, path))
+        path_info = self.git_configuration.path_lookup(path, protocol_hint='http')
+        if path_info is None:
+            log.msg('User %s tried to access %s but the lookup failed' % (self.username, path))
             return resource
 
-        if hasattr(self.git_configuration, 'split_path'):
-            script_name, new_path = self.git_configuration.split_path(path)
+        log.msg('Lookup of %s gave %r' % (path, path_info))
 
-        log.msg('Resolved %s to %s with splitting %s :: %s' % (path, gitpath, script_name, new_path))
+        if path_info['repository_fs_path'] is None and path_info['repository_base_fs_path'] is None:
+            log.msg('Neither a repository base nor a repository were returned')
+            return resource
+
+        # split script_name / new_path according to path info
+        if path_info['repository_base_url_path'] is not None:
+            script_name = '/' + path_info['repository_base_url_path'].strip('/')
+            new_path = path[len(script_name.rstrip('/')):]
 
         # since pretty much everything needs read access, check for it now
-        if not self.authnz.can_read(self.username, script_name):
+        if not self.authnz.can_read(self.username, path_info):
             if self.username is None:
                 return UnauthorizedResource(self.credentialFactories)
             else:
@@ -286,18 +294,18 @@ class GitResource(Resource):
         if len(pathparts) >= 2 and pathparts[-2] == 'info' and pathparts[-1] == 'refs':
             if 'service' in request.args and request.args['service'][0] == 'git-receive-pack':
                 writerequired = True
-            resource = InfoRefs(gitpath)
+            resource = InfoRefs(path_info['repository_fs_path'])
 
         elif len(pathparts) >= 1 and pathparts[-1] == 'git-upload-pack':
             cmd = 'git'
-            args = [os.path.basename(cmd), 'upload-pack', '--stateless-rpc', gitpath]
+            args = [os.path.basename(cmd), 'upload-pack', '--stateless-rpc', path_info['repository_fs_path']]
             resource = GitCommand(cmd, args)
             request.setHeader('Content-Type', 'application/x-git-upload-pack-result')
 
         elif len(pathparts) >= 1 and pathparts[-1] == 'git-receive-pack':
             writerequired = True
             cmd = 'git'
-            args = [os.path.basename(cmd), 'receive-pack', '--stateless-rpc', gitpath]
+            args = [os.path.basename(cmd), 'receive-pack', '--stateless-rpc', path_info['repository_fs_path']]
             resource = GitCommand(cmd, args)
             request.setHeader('Content-Type', 'application/x-git-receive-pack-result')
 
@@ -314,19 +322,39 @@ class GitResource(Resource):
 
             # if we have a match, serve the file with the appropriate headers or fallback to webfrontend
             if filename is None:
-                # TODO: webfrontend support
-                pass
+                # No match -> fallback to git viewer
+
+                if script_name is not None:
+                    # patch pre/post path of request according to splitting
+                    request.prepath = script_name.strip('/').split('/')
+                    request.prepath.remove('')
+                    request.postpath = new_path.lstrip('/').split('/')
+
+                    log.msg("pre and post: %r %r" % (request.prepath, request.postpath))
+
+                if hasattr(self.git_viewer, "withEnviron"):
+                    # set wsgirouting args
+                    routing_args = {
+                        'repository_path': path_info['repository_fs_path'],
+                        'repository_base': path_info['repository_base_fs_path']
+                    }
+                    if 'repository_clone_urls' in path_info:
+                        routing_args['repository_clone_urls'] = path_info['repository_clone_urls']
+                    resource = self.git_viewer.withEnviron({'wsgiorg.routing_args': ([], routing_args)})
+                else:
+                    resource = self.git_viewer
+
             else:
                 for key, val in headers.items():
                     request.setHeader(key, val)
 
-                log.msg("Returning file %s" % os.path.join(gitpath, filename))
-                resource = File(os.path.join(gitpath, filename), headers['Content-Type'])
+                log.msg("Returning file %s" % os.path.join(path_info['repository_fs_path'], filename))
+                resource = File(os.path.join(path_info['repository_fs_path'], filename), headers['Content-Type'])
                 resource.isLeaf = True  # we are always going straight to the file, so skip further resource tree traversal
 
         # before returning the resource, check if write access is required and enforce privileges accordingly
         # anonymous (username = None) will never be granted write access
-        if writerequired and (self.username is None or not self.authnz.can_write(self.username, script_name)):
+        if writerequired and (self.username is None or not self.authnz.can_write(self.username, path_info)):
             if self.username is None:
                 return UnauthorizedResource(self.credentialFactories)
             else:
@@ -341,23 +369,29 @@ class GitResource(Resource):
 class GitHTMLRealm(object):
     implements(IRealm)
 
-    def __init__(self, authnz, git_configuration, credentialFactories):
+    def __init__(self, authnz, git_configuration, credentialFactories, git_viewer):
         self.authnz = authnz
         self.git_configuration = git_configuration
         self.credentialFactories = credentialFactories
+        self.git_viewer = git_viewer
 
     def requestAvatar(self, avatarId, mind, *interfaces):
         if avatarId == ANONYMOUS:
             avatarId = None  # anonymous
 
         if IResource in interfaces:
-            return IResource, GitResource(avatarId, self.authnz, self.git_configuration, self.credentialFactories), lambda: None
+            return IResource, GitResource(avatarId, self.authnz, self.git_configuration, self.credentialFactories, self.git_viewer), lambda: None
         raise NotImplementedError()
 
 
-def create_factory(authnz, git_configuration):
+def create_factory(authnz, git_configuration, git_viewer=None):
+    if git_viewer is None:
+        git_viewer = NoResource()
+    elif not IResource.providedBy(git_viewer):
+        raise ValueError("git_viewer should be either implement IResource")
+
     credentialFactories = [BasicCredentialFactory('Git Repositories')]
-    gitportal = Portal(GitHTMLRealm(authnz, git_configuration, credentialFactories))
+    gitportal = Portal(GitHTMLRealm(authnz, git_configuration, credentialFactories, git_viewer))
 
     if hasattr(authnz, 'check_password'):
         log.msg("Registering PasswordChecker")

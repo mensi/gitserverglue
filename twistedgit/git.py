@@ -101,11 +101,11 @@ class GitProtocol(Protocol):
             except ValueError:
                 return self.sendErrorAndDisconnect("ERR Unable to parse request line")
 
-            realpath = self.git_configuration.translate_path(path)
-            if realpath is None:
+            path_info = self.git_configuration.path_lookup(path, protocol_hint='git')
+            if path_info is None or path_info['repository_fs_path'] is None:
                 return self.sendErrorAndDisconnect("ERR Repository not found")
 
-            if not self.authnz.can_read(None, path):
+            if not self.authnz.can_read(None, path_info):
                 return self.sendErrorAndDisconnect("ERR Repository does not allow anonymous read access")
 
             self.pauseProducing()  # wait with data until we have a connection to the process
@@ -113,7 +113,7 @@ class GitProtocol(Protocol):
             self.process = GitProcessProtocol(self)
 
             gitbinary = self.git_configuration.git_binary
-            cmdargs = ['git', 'upload-pack', realpath]
+            cmdargs = ['git', 'upload-pack', path_info['repository_fs_path']]
             log.msg("Spawning %s with args %r" % (gitbinary, cmdargs))
             reactor.spawnProcess(self.process, gitbinary, cmdargs)
 
