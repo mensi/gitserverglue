@@ -33,12 +33,4 @@ TwistedGit will install a command you can use to serve the current directory to 
 	
 The implementation (in `twistedgit/__init__.py`) demonstrates the basic usage. The class `TestAuthnz` handles 
 authentication (`check_password`, `check_publickey`) and authorization (`can_read`, `can_write`) while 
-`TestGitConfiguration` maps virtual URLs to filesystem paths. `split_path` is only relevant for HTTP(S) and 
-splits the URL into virtual repository path and rest. 
-
-Known Issues
-------------
-
-Twisted will buffer the request body of incoming HTTP requests. Large commits will therefore be buffered in 
-a temporary file before they are passed to git. Cloning is not affected since outgoing responses are sent with the 
-`chunked` transfer encoding.
+`TestGitConfiguration` maps virtual URLs to filesystem paths. 
