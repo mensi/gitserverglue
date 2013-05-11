@@ -31,24 +31,58 @@ from twistedgit import ssh, http, git
 from twistedgit.streamingweb import make_site_streaming
 from twistedgit.wsgihelper import WSGIResource
 
+from ConfigParser import SafeConfigParser
+from passlib.apache import HtpasswdFile
+
 
 class TestAuthnz(object):
+    def __init__(self,
+                 htpasswd_file=".htpasswd",
+                 perms_file=".repoperms",
+                 keys_file=".rsakeys"):
+        self.htpasswd = HtpasswdFile(htpasswd_file)
+        self.perms_file = perms_file
+        self.keys_file = keys_file
+
     def can_read(self, username, path_info):
-        if username is None:
-            return (path_info['repository_fs_path'] is not None and
-                os.path.basename(path_info['repository_fs_path'])
-                .startswith('public_'))
-        else:
-            return True
+        return self._check_access(username, path_info, "r")
 
     def can_write(self, username, path_info):
-        return True
+        return self._check_access(username, path_info, "w")
+
+    def _check_access(self, username, path_info, level):
+        if username is None:
+            username = "anonymous"
+
+        if path_info['repository_fs_path'] is None:
+            return False
+
+        repo = os.path.basename(path_info['repository_fs_path'])
+
+        config = SafeConfigParser()
+        config.read(self.perms_file)
+
+        if not config.has_option(repo, username):
+            return False
+
+        return level in config.get(repo, username)
 
     def check_password(self, username, password):
-        return username == 'test' and password == 'test'
+        self.htpasswd.load_if_changed()
+        return self.htpasswd.check_password(username, password)
 
     def check_publickey(self, username, keyblob):
-        return username == 'test' and keyblob == keys.Key.fromString(data=publicKey).blob()
+        with open(self.keys_file, 'rb') as f:
+            for line in f:
+                try:
+                    user, key = line.split(':', 1)
+                    if (username == user.strip() and
+                        keyblob == keys.Key.fromString(data=key.strip()
+                                                       ).blob()):
+                        return True
+                except:
+                    log.err(None, "Loading key failed")
+        return False
 
 
 class TestGitConfiguration(object):
