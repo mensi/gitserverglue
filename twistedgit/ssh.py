@@ -17,17 +17,14 @@
 # You should have received a copy of the GNU General Public License
 # along with TwistedGit.  If not, see http://www.gnu.org/licenses
 
-from twisted.cred import portal, checkers, credentials
-from twisted.conch import error, avatar
+from twisted.cred import portal
+from twisted.conch import avatar
 from twisted.conch.checkers import SSHPublicKeyDatabase
-from twisted.conch.ssh import factory, userauth, connection, keys, session
-from twisted.internet import reactor, protocol, defer
-from twisted.internet.error import ProcessExitedAlready, ProcessTerminated
-from twisted.internet.interfaces import IProcessTransport
+from twisted.conch.ssh import factory, session
+from twisted.internet import reactor, defer
+from twisted.internet.error import ProcessExitedAlready
 from twisted.python import log, components
-from twisted.python.failure import Failure
 from zope.interface import implements
-import sys
 import shlex
 
 from twistedgit.common import ErrorProcess, PasswordChecker
@@ -51,11 +48,11 @@ class GitRealm:
 
     def requestAvatar(self, avatarId, mind, *interfaces):
         log.msg("request %r, %r" % (mind, interfaces))
-        return interfaces[0], GitAvatar(avatarId, self.authnz, self.git_configuration), lambda: None
+        return interfaces[0], GitAvatar(avatarId, self.authnz,
+                                        self.git_configuration), lambda: None
 
 
 class GitSession:
-
     def __init__(self, avatar):
         self.avatar = avatar
         self.ptrans = None
@@ -68,21 +65,30 @@ class GitSession:
             log.err('Unknown RPC: ' + rpc)
             return self._kill_connection(proto, "Unknown RPC")
 
-        if (rpc == 'git-upload-pack' and not self.avatar.authnz.can_read(self.avatar.username, path)):
-            log.msg('User %s tried to access %s but does not have read permissions' % (self.avatar.username, path))
-            return self._kill_connection(proto, "You don't have read permissions")
+        if (rpc == 'git-upload-pack' and
+            not self.avatar.authnz.can_read(self.avatar.username, path)):
+            log.msg('User %s tried to access %s but '
+                    'does not have read permissions' % (self.avatar.username,
+                                                            path))
+            return self._kill_connection(proto,
+                                         "You don't have read permissions")
 
-        if (rpc == 'git-receive-pack' and not self.avatar.authnz.can_write(self.avatar.username, path)):
-            log.msg('User %s tried to access %s but does not have write permissions' % (self.avatar.username, path))
-            return self._kill_connection(proto, "You don't have write permissions")
+        if (rpc == 'git-receive-pack' and
+            not self.avatar.authnz.can_write(self.avatar.username, path)):
+            log.msg('User %s tried to access %s but does not have '
+                    'write permissions' % (self.avatar.username, path))
+            return self._kill_connection(proto,
+                                         "You don't have write permissions")
 
         path_info = self.avatar.git_configuration.path_lookup(path)
         gitshell = self.avatar.git_configuration.git_shell_binary
         if path_info is None or path_info['repository_fs_path'] is None:
-            log.msg('User %s tried to access %s but the translator did not return a real path' % (self.avatar.username, path))
+            log.msg('User %s tried to access %s but the translator did '
+                    'not return a real path' % (self.avatar.username, path))
             return self._kill_connection(proto, "Unknown Repository")
         else:
-            cmdargs = ['git-shell', '-c', rpc + ' \'' + path_info['repository_fs_path'] + '\'']
+            cmdargs = ['git-shell', '-c',
+                       rpc + ' \'' + path_info['repository_fs_path'] + '\'']
             log.msg("Spawning %s with args %r" % (gitshell, cmdargs))
             self.ptrans = reactor.spawnProcess(proto, gitshell, cmdargs)
 
@@ -116,7 +122,8 @@ class PublicKeyChecker(SSHPublicKeyDatabase):
         self.checker = checker
 
     def checkKey(self, credentials):
-        return defer.maybeDeferred(self.checker, credentials.username, credentials.blob)
+        return defer.maybeDeferred(self.checker, credentials.username,
+                                   credentials.blob)
 
 
 def create_factory(private_keys, public_keys, authnz, git_configuration):

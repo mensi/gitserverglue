@@ -19,7 +19,7 @@
 
 from twisted.cred import checkers, credentials, error
 from twisted.internet import defer
-from twisted.internet.error import ProcessExitedAlready, ProcessTerminated
+from twisted.internet.error import ProcessTerminated
 from twisted.internet.interfaces import IProcessTransport
 from twisted.python.failure import Failure
 from zope.interface import implements

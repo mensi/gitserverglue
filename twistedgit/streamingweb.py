@@ -20,12 +20,12 @@
 from urllib import unquote
 import string
 
-from zope.interface.verify import verifyObject
 from twisted.internet.interfaces import IConsumer
 from twisted.web.http import HTTPChannel, parse_qs, datetimeToString
 from twisted.web.server import Request, version
 from twisted.web.resource import IResource, getChildForRequest
 from twisted.web.util import DeferredResource
+from twisted.python import failure
 
 
 class StreamingRequest(Request):
@@ -156,7 +156,8 @@ class StreamingHTTPChannel(HTTPChannel):
         HTTPChannel.allHeadersReceived(self)
         req = self.requests[-1]
         if hasattr(req, "requestHeadersReceived"):
-            req.requestHeadersReceived(self._command, self._path, self._version)
+            req.requestHeadersReceived(self._command,
+                                       self._path, self._version)
 
 
 def make_site_streaming(site):

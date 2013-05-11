@@ -22,7 +22,7 @@ from twisted.python import log
 
 from twisted.internet import reactor
 from twisted.internet.protocol import Protocol, ProcessProtocol, Factory
-from twisted.internet.interfaces import IPushProducer, IConsumer
+from twisted.internet.interfaces import IPushProducer
 
 from twistedgit.common import git_packet
 
@@ -74,16 +74,20 @@ class GitProtocol(Protocol):
             try:
                 pktlen = int(self.__buffer[:4], 16)
             except ValueError:
-                return self.sendErrorAndDisconnect("ERR Invalid Paket Length: " + self.__buffer[:4])
+                return self.sendErrorAndDisconnect(
+                    "ERR Invalid Paket Length: " + self.__buffer[:4])
 
             if pktlen == 0:  # flush packet 0000
                 pktlen = 4
 
+            # The git protocol specifies bounds for the packet length
             if pktlen < 4 or pktlen > 65524:
-                return self.sendErrorAndDisconnect("ERR Invalid Paket Length: " + self.__buffer[:4])
+                return self.sendErrorAndDisconnect(
+                    "ERR Invalid Paket Length: " + self.__buffer[:4])
 
+            # Do we have the complete packet in the buffer?
             if pktlen > len(self.__buffer):
-                return  # not enough data
+                return
 
             packet = self.__buffer[:pktlen]
             self.__buffer = self.__buffer[pktlen:]
@@ -93,22 +97,32 @@ class GitProtocol(Protocol):
         if not self.requestReceived:
             payload = data[4:]
 
+            # git:// would also support other RPC methods, but since
+            # there is no authentication, only allow cloning aka
+            # git-upload-pack
             if not payload.startswith("git-upload-pack"):
-                return self.sendErrorAndDisconnect("ERR Request not supported. Only git-upload-pack will be accepted")
+                return self.sendErrorAndDisconnect(
+                    "ERR Request not supported. "
+                    "Only git-upload-pack will be accepted")
 
             try:
-                path, host, unused_eol = payload[len("git-upload-pack "):].split("\0")
+                rpc_params = payload[len("git-upload-pack "):].split("\0")
+                path, unused_host, unused_eol = rpc_params
             except ValueError:
-                return self.sendErrorAndDisconnect("ERR Unable to parse request line")
+                return self.sendErrorAndDisconnect(
+                    "ERR Unable to parse request line")
 
-            path_info = self.git_configuration.path_lookup(path, protocol_hint='git')
+            path_info = self.git_configuration.path_lookup(path,
+                                                           protocol_hint='git')
             if path_info is None or path_info['repository_fs_path'] is None:
                 return self.sendErrorAndDisconnect("ERR Repository not found")
 
             if not self.authnz.can_read(None, path_info):
-                return self.sendErrorAndDisconnect("ERR Repository does not allow anonymous read access")
+                return self.sendErrorAndDisconnect(
+                    "ERR Repository does not allow anonymous read access")
 
-            self.pauseProducing()  # wait with data until we have a connection to the process
+            # wait with data until we have a connection to the process
+            self.pauseProducing()
             self.requestReceived = True
             self.process = GitProcessProtocol(self)
 

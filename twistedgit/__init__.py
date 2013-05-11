@@ -35,7 +35,9 @@ from twistedgit.wsgihelper import WSGIResource
 class TestAuthnz(object):
     def can_read(self, username, path_info):
         if username is None:
-            return path_info['repository_fs_path'] is not None and os.path.basename(path_info['repository_fs_path']).startswith('public_')
+            return (path_info['repository_fs_path'] is not None and
+                os.path.basename(path_info['repository_fs_path'])
+                .startswith('public_'))
         else:
             return True
 
@@ -57,7 +59,7 @@ class TestGitConfiguration(object):
         res = {
             'repository_base_fs_path': './',
             'repository_base_url_path': '/',
-            'repository_fs_path' : None
+            'repository_fs_path': None
         }
 
         pathparts = url.strip('/').split('/')
@@ -71,7 +73,6 @@ class TestGitConfiguration(object):
                     'git': 'git://localhost/' + pathparts[0],
                     'ssh': 'ssh://localhost:5522/' + pathparts[0]
                 }
-
 
         return res
 
@@ -104,7 +105,8 @@ def find_git_viewer():
 def main():
     log.startLogging(sys.stderr)
 
-    keylocation = os.path.expanduser(os.path.join('~', '.twistedgit', 'key.pem'))
+    keylocation = os.path.expanduser(
+                    os.path.join('~', '.twistedgit', 'key.pem'))
     key = None
 
     if os.path.exists(keylocation):
