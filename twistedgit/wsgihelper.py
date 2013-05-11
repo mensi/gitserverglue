@@ -18,7 +18,6 @@
 # along with TwistedGit.  If not, see http://www.gnu.org/licenses
 
 from twisted.web.server import NOT_DONE_YET
-from twisted.python import log
 import twisted.web.wsgi as twsgi
 
 
