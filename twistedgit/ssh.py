@@ -61,12 +61,20 @@ class GitSession:
         cmdparts = shlex.split(cmd)
         rpc = cmdparts[0]
         path = cmdparts[-1]
+
+        path_info = self.avatar.git_configuration.path_lookup(path,
+                                    protocol_hint="ssh")
+        if path_info is None or path_info['repository_fs_path'] is None:
+            log.msg('User %s tried to access %s but the translator did '
+                    'not return a real path' % (self.avatar.username, path))
+            return self._kill_connection(proto, "Unknown Repository")
+
         if rpc not in ['git-upload-pack', 'git-receive-pack']:
             log.err('Unknown RPC: ' + rpc)
             return self._kill_connection(proto, "Unknown RPC")
 
         if (rpc == 'git-upload-pack' and
-            not self.avatar.authnz.can_read(self.avatar.username, path)):
+            not self.avatar.authnz.can_read(self.avatar.username, path_info)):
             log.msg('User %s tried to access %s but '
                     'does not have read permissions' % (self.avatar.username,
                                                             path))
@@ -74,23 +82,17 @@ class GitSession:
                                          "You don't have read permissions")
 
         if (rpc == 'git-receive-pack' and
-            not self.avatar.authnz.can_write(self.avatar.username, path)):
+            not self.avatar.authnz.can_write(self.avatar.username, path_info)):
             log.msg('User %s tried to access %s but does not have '
                     'write permissions' % (self.avatar.username, path))
             return self._kill_connection(proto,
                                          "You don't have write permissions")
 
-        path_info = self.avatar.git_configuration.path_lookup(path)
         gitshell = self.avatar.git_configuration.git_shell_binary
-        if path_info is None or path_info['repository_fs_path'] is None:
-            log.msg('User %s tried to access %s but the translator did '
-                    'not return a real path' % (self.avatar.username, path))
-            return self._kill_connection(proto, "Unknown Repository")
-        else:
-            cmdargs = ['git-shell', '-c',
-                       rpc + ' \'' + path_info['repository_fs_path'] + '\'']
-            log.msg("Spawning %s with args %r" % (gitshell, cmdargs))
-            self.ptrans = reactor.spawnProcess(proto, gitshell, cmdargs)
+        cmdargs = ['git-shell', '-c',
+                   rpc + ' \'' + path_info['repository_fs_path'] + '\'']
+        log.msg("Spawning %s with args %r" % (gitshell, cmdargs))
+        self.ptrans = reactor.spawnProcess(proto, gitshell, cmdargs)
 
     def getPty(self, term, windowSize, attrs):
         pass
