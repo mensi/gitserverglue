@@ -56,4 +56,8 @@ You can then invoke `twistedgit`:
 	
 The implementation (in `twistedgit/__init__.py`) demonstrates the basic usage. The class `TestAuthnz` handles 
 authentication (`check_password`, `check_publickey`) and authorization (`can_read`, `can_write`) while 
-`TestGitConfiguration` maps virtual URLs to filesystem paths. 
+`TestGitConfiguration` maps virtual URLs to filesystem paths.
+
+License
+-------
+TwistedGit is licensed under GPLv3.
