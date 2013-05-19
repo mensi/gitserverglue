@@ -26,7 +26,8 @@ Usage
 TwistedGit will install a command you can use to serve git repositories in the current directory.
 You need to create three files to control access:
 
- * `.htaccess` is a apache-style htaccess file containing users and their passwords.
+ * `.htpasswd` is a apache-style htpasswd file containing users and their passwords. You can
+   use `htpasswd -c .htpasswd myuser` to create one. (Needs `apache2-utils` to be installed on Ubuntu)
  * `.repoperms` is an ini-style config file. You need to create a section for each repository
    with `user = rw` mappings. The user `anonymous` is used when no user is given. Example:
    
