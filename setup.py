@@ -21,7 +21,7 @@
 from setuptools import setup, find_packages
 
 setup(name='TwistedGit',
-      install_requires=['twisted', 'pycrypto', 'passlib'],
+      install_requires=['twisted', 'pycrypto', 'passlib', 'pyasn1'],
       description=(
                    'Twisted-based implementation of the '
                    'network protocols supported by git'
