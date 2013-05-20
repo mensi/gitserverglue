@@ -28,7 +28,7 @@ setup(name='TwistedGit',
                    ' (git://, ssh:// and http://)'
       ),
       keywords='git ssh http',
-      version='0.3dev',
+      version='0.2.1',
       url='https://github.com/mensi/twistedgit',
       license='GPL',
       author='Manuel Stocker',
