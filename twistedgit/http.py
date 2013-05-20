@@ -360,7 +360,8 @@ class GitResource(Resource):
                     # patch pre/post path of request according to
                     # script_name and path
                     request.prepath = script_name.strip('/').split('/')
-                    request.prepath.remove('')
+                    if request.prepath == ['']:
+                        request.prepath = []
                     request.postpath = new_path.lstrip('/').split('/')
 
                     log.msg("pre and post: %r %r" % (request.prepath,
