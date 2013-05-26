@@ -23,10 +23,10 @@ ssh-keygen -f test_key -N ""
 echo -n "test: " > .rsakeys
 cat test_key.pub >> .rsakeys
 
-twistedgit &
-TWISTEDGIT_PID=$!
+gitserverglue &
+DAEMON_PID=$!
 
-# wait a bit to give twistedgit a chance to start
+# wait a bit to give gitserverglue a chance to start
 sleep 5
 
 git clone http://test:test@localhost:8080/test.git test_http
@@ -41,7 +41,7 @@ git clone git://localhost/test.git test_git
 if [ ! -e test_git/test.txt ]
 then
 	echo "[git://] Comitted file missing!!!"
-	kill $TWISTEDGIT_PID
+	kill $DAEMON_PID
 	exit 1
 fi
 
@@ -49,7 +49,7 @@ ssh-agent bash -c 'ssh-add test_key; git clone ssh://test@localhost:5522/test.gi
 if [ ! -e test_ssh/test.txt ]
 then
 	echo "[ssh://] Comitted file missing!!!"
-	kill $TWISTEDGIT_PID
+	kill $DAEMON_PID
 	exit 1
 fi
 echo "hi tester" >> test_ssh/test.txt
@@ -59,7 +59,7 @@ git commit -m "foobar"
 ssh-agent bash -c 'ssh-add ../test_key; git push'
 cd ..
 
-kill $TWISTEDGIT_PID
+kill $DAEMON_PID
 deactivate
 rm -rf $VENV
 

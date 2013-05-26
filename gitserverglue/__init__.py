@@ -2,20 +2,20 @@
 #
 # Copyright 2011 Manuel Stocker <mensi@mensi.ch>
 #
-# This file is part of TwistedGit.
+# This file is part of GitServerGlue.
 #
-# TwistedGit is free software: you can redistribute it and/or modify
+# GitServerGlue is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# TwistedGit is distributed in the hope that it will be useful,
+# GitServerGlue is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with TwistedGit.  If not, see http://www.gnu.org/licenses
+# along with GitServerGlue.  If not, see http://www.gnu.org/licenses
 
 import os
 import os.path
@@ -27,9 +27,9 @@ from twisted.python import log
 
 from Crypto.PublicKey import RSA
 
-from twistedgit import ssh, http, git
-from twistedgit.streamingweb import make_site_streaming
-from twistedgit.wsgihelper import WSGIResource
+from gitserverglue import ssh, http, git
+from gitserverglue.streamingweb import make_site_streaming
+from gitserverglue.wsgihelper import WSGIResource
 
 from ConfigParser import SafeConfigParser
 from passlib.apache import HtpasswdFile
@@ -140,7 +140,7 @@ def main():
     log.startLogging(sys.stderr)
 
     keylocation = os.path.expanduser(
-                    os.path.join('~', '.twistedgit', 'key.pem'))
+                    os.path.join('~', '.gitserverglue', 'key.pem'))
     key = None
 
     if os.path.exists(keylocation):
