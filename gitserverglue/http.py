@@ -400,7 +400,7 @@ class GitResource(Resource):
         return ForbiddenResource()
 
 
-class GitHTMLRealm(object):
+class GitHTTPRealm(object):
     implements(IRealm)
 
     def __init__(self, authnz, git_configuration,
@@ -426,10 +426,10 @@ def create_factory(authnz, git_configuration, git_viewer=None):
     if git_viewer is None:
         git_viewer = NoResource()
     elif not IResource.providedBy(git_viewer):
-        raise ValueError("git_viewer should be either implement IResource")
+        raise ValueError("git_viewer should implement IResource")
 
     credentialFactories = [BasicCredentialFactory('Git Repositories')]
-    gitportal = Portal(GitHTMLRealm(authnz, git_configuration,
+    gitportal = Portal(GitHTTPRealm(authnz, git_configuration,
                                     credentialFactories, git_viewer))
 
     if hasattr(authnz, 'check_password'):
